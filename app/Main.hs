@@ -6,4 +6,4 @@ import           Text.Megaparsec
 main :: IO ()
 main = do
   dts <- getContents
-  parseTest parseDTS dts
+  parseTest parseSource dts

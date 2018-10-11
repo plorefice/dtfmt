@@ -4,7 +4,7 @@ module AST
     , Label(..)
     , Stmt(..)
     , Node(..)
-    , parseDTS
+    , parseSource
     )
 where
 
@@ -31,12 +31,19 @@ data Value
 
 type Label = String
 
+data Include
+    = Local String
+    | Global String
+    deriving (Eq)
+
 data Stmt
     = N Node
     | P Property
     deriving (Eq)
 
 data Node = Node (Maybe Label) String [Stmt] deriving (Eq)
+
+data Source = Source [Include] [Node] deriving (Eq)
 
 {- Show implementations -}
 
@@ -63,6 +70,14 @@ instance Show Node where
 instance Show Stmt where
     show (N n) = show n
     show (P p) = show p
+
+instance Show Include where
+    show (Local s) = "#include \"" ++ s ++ "\""
+    show (Global s) = "#include <" ++ s ++ ">"
+
+instance Show Source where
+    show (Source incs ns) = f incs ++ "\n" ++ f ns
+        where f xs = intercalate "\n" $ fmap show xs
 
 {- Grammar utility functions -}
 
@@ -116,6 +131,9 @@ validPropChar = alphaNumChar <|> validNodeChar <|> oneOf "?#"
 validLabelChar :: Parser Char
 validLabelChar = alphaNumChar <|> char '_'
 
+validPathChar :: Parser Char
+validPathChar = alphaNumChar <|> oneOf "._-/"
+
 {- Identifier parsing -}
 
 nodeident :: Parser String
@@ -142,9 +160,6 @@ nodename = (lexeme . try) $ refident <|> name
 
 {- Property parsing -}
 
-propname :: Parser String
-propname = (lexeme . try) (many validPropChar)
-
 u32 :: Parser Value
 u32 = U32 <$> number
 
@@ -160,6 +175,9 @@ def = Def <$> defident
 array :: Parser Value
 array = Array <$> between (symbol "<") (symbol ">") content
     where content = (many . lexeme) $ u32 <|> str <|> ref <|> def
+
+propname :: Parser String
+propname = (lexeme . try) (many validPropChar)
 
 propval :: Parser Value
 propval = f <$> sepBy1 allowed comma
@@ -196,7 +214,18 @@ node = do
     N n <- node'
     return n
 
+{- Directives parsing -}
+
+include :: Parser Include
+include = lexeme (string "#include") *> (local <|> global)
+  where
+    local  = Local <$> delim '"' (some validPathChar)
+    global = Global <$> between (symbol "<") (symbol ">") (some validPathChar)
+
 {- Public interface -}
 
-parseDTS :: Parser [Node]
-parseDTS = between sc eof (many node)
+parseSource :: Parser Source
+parseSource = between sc eof $ do
+    incs <- many include
+    ns   <- many node
+    return $ Source incs ns

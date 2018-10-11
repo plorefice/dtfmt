@@ -14,9 +14,10 @@ data Property = Property String Value deriving (Show, Eq)
 
 data Value
     = Empty
-    | U32 Integer
+    | U32 String
     | Str String
     | Ref String
+    | Def String
     | Array [Value]
     | List [Value]
     deriving (Show, Eq)
@@ -42,8 +43,14 @@ lexeme = L.lexeme sc
 symbol :: String -> Parser String
 symbol = L.symbol sc
 
-number :: Parser Integer
-number = lexeme (L.decimal <|> L.hexadecimal)
+hex :: Parser String
+hex = (++) <$> string "0x" <*> some hexDigitChar
+
+dec :: Parser String
+dec = some digitChar
+
+number :: Parser String
+number = lexeme (hex <|> dec)
 
 comma :: Parser String
 comma = symbol ","
@@ -81,10 +88,13 @@ nodeident = string "/" <|> internal
     where internal = (:) <$> letterChar <*> many validNodeChar
 
 refident :: Parser String
-refident = (:) <$> char '&' <*> many validLabelChar
+refident = (:) <$> char '&' <*> some validLabelChar
 
 labelident :: Parser String
 labelident = (++) <$> (many validLabelChar) <*> symbol ":"
+
+defident :: Parser String
+defident = (:) <$> (letterChar <|> char '_') <*> many validLabelChar
 
 unitaddr :: Parser String
 unitaddr = (:) <$> char '@' <*> many hexDigitChar
@@ -110,18 +120,18 @@ str = Str <$> stringlit
 ref :: Parser Value
 ref = Ref <$> refident
 
+def :: Parser Value
+def = Def <$> defident
+
 array :: Parser Value
 array = Array <$> between (symbol "<") (symbol ">") content
-    where content = many (u32 <|> str <|> ref)
-
-list :: Parser Value
-list = f <$> sepBy1 allowed comma
-  where
-    f l = if length l == 1 then head l else List l
-    allowed = u32 <|> str <|> ref <|> array
+    where content = (many . lexeme) $ u32 <|> str <|> ref <|> def
 
 propval :: Parser Value
-propval = array <|> list
+propval = f <$> sepBy1 allowed comma
+  where
+    f l = if length l == 1 then head l else List l
+    allowed = str <|> ref <|> array
 
 boolprop :: Parser Property
 boolprop = do

@@ -1,4 +1,7 @@
-module Lib where
+module Lib
+    ( parseDTS
+    )
+where
 
 import           Data.Void
 import           Text.Megaparsec
@@ -80,19 +83,23 @@ nodeident = string "/" <|> internal
 refident :: Parser String
 refident = (:) <$> char '&' <*> many validLabelChar
 
+labelident :: Parser String
+labelident = (++) <$> (many validLabelChar) <*> symbol ":"
+
 unitaddr :: Parser String
-unitaddr = lexeme (many hexDigitChar)
+unitaddr = (:) <$> char '@' <*> many hexDigitChar
 
 nodename :: Parser String
 nodename = (lexeme . try) (refident <|> name)
   where
-    name    = (++) <$> nodeident <*> optaddr
-    optaddr = option "" $ (:) <$> char '@' <*> unitaddr
+    name     = (++) <$> ((++) <$> optlabel <*> nodeident) <*> optaddr
+    optlabel = option "" $ try labelident
+    optaddr  = option "" $ try unitaddr
 
 {- Property parsing -}
 
 propname :: Parser String
-propname = (lexeme . try) ((:) <$> letterChar <*> many validPropChar)
+propname = (lexeme . try) (many validPropChar)
 
 u32 :: Parser Value
 u32 = U32 <$> number
@@ -114,7 +121,7 @@ list = f <$> sepBy1 allowed comma
     allowed = u32 <|> str <|> ref <|> array
 
 propval :: Parser Value
-propval = u32 <|> str <|> array <|> list
+propval = array <|> list
 
 boolprop :: Parser Property
 boolprop = do
@@ -143,3 +150,8 @@ node :: Parser Node
 node = do
     N n <- node'
     return n
+
+{- Public interface -}
+
+parseDTS :: Parser [Node]
+parseDTS = between sc eof (many node)

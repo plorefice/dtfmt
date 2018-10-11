@@ -1,10 +1,7 @@
 module Lib where
 
-import           Control.Applicative
-import           Control.Monad                  ( void )
 import           Data.Void
-import           Data.Maybe
-import           Text.Megaparsec               as MP
+import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L
 

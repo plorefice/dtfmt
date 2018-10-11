@@ -1,6 +1,9 @@
 module Main where
 
-import           Lib
+import           AST
+import           Text.Megaparsec
 
 main :: IO ()
-main = putStrLn ""
+main = do
+  dts <- getContents
+  parseTest parseDTS dts

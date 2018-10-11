@@ -61,11 +61,11 @@ instance Show Property where
     show (Property s v) = s ++ " = " ++ show v ++ ";"
 
 instance Show Node where
-    show (Node (Just l) n ss) = l ++ ": " ++ n ++ " {\n" ++ (f ss) ++ "\n};\n"
-        where f ss  = intercalate "\n" $ fmap show ss
+    show (Node (Just l) n ss) = l ++ ": " ++ n ++ " {\n" ++ f ss ++ "};"
+        where f = concatMap ((++ "\n") . show)
 
-    show (Node Nothing n ss) = n ++ " {\n" ++ (f ss) ++ "\n};\n"
-        where f ss  = intercalate "\n" $ fmap show ss
+    show (Node Nothing n ss) = n ++ " {\n" ++ f ss ++ "};"
+        where f = concatMap ((++ "\n") . show)
 
 instance Show Stmt where
     show (N n) = show n
@@ -76,7 +76,7 @@ instance Show Include where
     show (Global s) = "#include <" ++ s ++ ">"
 
 instance Show Source where
-    show (Source incs ns) = f incs ++ "\n" ++ f ns
+    show (Source incs ns) = f incs ++ "\n\n" ++ f ns
         where f xs = intercalate "\n" $ fmap show xs
 
 {- Grammar utility functions -}

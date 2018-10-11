@@ -18,16 +18,18 @@ data Value
     | Str String
     | Ref String
     | Def String
-    | Array [Value]
     | List [Value]
+    | Array [Value]
     deriving (Show, Eq)
+
+type Label = String
 
 data Stmt
     = N Node
     | P Property
     deriving (Show, Eq)
 
-data Node = Node String [Stmt] deriving (Show, Eq)
+data Node = Node (Maybe Label) String [Stmt] deriving (Show, Eq)
 
 {- Grammar utility functions -}
 
@@ -90,21 +92,20 @@ nodeident = string "/" <|> internal
 refident :: Parser String
 refident = (:) <$> char '&' <*> some validLabelChar
 
-labelident :: Parser String
-labelident = (++) <$> (many validLabelChar) <*> symbol ":"
-
 defident :: Parser String
 defident = (:) <$> (letterChar <|> char '_') <*> many validLabelChar
 
 unitaddr :: Parser String
 unitaddr = (:) <$> char '@' <*> many hexDigitChar
 
+nodelabel :: Parser String
+nodelabel = (lexeme . try) $ some validLabelChar <* symbol ":"
+
 nodename :: Parser String
-nodename = (lexeme . try) (refident <|> name)
+nodename = (lexeme . try) $ refident <|> name
   where
-    name     = (++) <$> ((++) <$> optlabel <*> nodeident) <*> optaddr
-    optlabel = option "" $ try labelident
-    optaddr  = option "" $ try unitaddr
+    name    = (++) <$> nodeident <*> optaddr
+    optaddr = option "" $ try unitaddr
 
 {- Property parsing -}
 
@@ -151,10 +152,11 @@ prop = P <$> (try boolprop <|> try binprop)
 
 node' :: Parser Stmt
 node' = do
+    l <- optional nodelabel
     n <- nodename
     c <- braces . many $ (prop <|> node')
     semi
-    return . N $ Node n c
+    return . N $ Node l n c
 
 node :: Parser Node
 node = do

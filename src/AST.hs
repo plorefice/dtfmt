@@ -1,8 +1,15 @@
 module AST
-    ( parseDTS
+    ( Property(..)
+    , Value(..)
+    , Label(..)
+    , Stmt(..)
+    , Node(..)
+    , parseDTS
     )
 where
 
+import           Data.List
+import           Data.Maybe
 import           Data.Void
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
@@ -10,7 +17,7 @@ import qualified Text.Megaparsec.Char.Lexer    as L
 
 type Parser = Parsec Void String
 
-data Property = Property String Value deriving (Show, Eq)
+data Property = Property String Value deriving (Eq)
 
 data Value
     = Empty
@@ -20,16 +27,42 @@ data Value
     | Def String
     | List [Value]
     | Array [Value]
-    deriving (Show, Eq)
+    deriving (Eq)
 
 type Label = String
 
 data Stmt
     = N Node
     | P Property
-    deriving (Show, Eq)
+    deriving (Eq)
 
-data Node = Node (Maybe Label) String [Stmt] deriving (Show, Eq)
+data Node = Node (Maybe Label) String [Stmt] deriving (Eq)
+
+{- Show implementations -}
+
+instance Show Value where
+    show Empty     = ""
+    show (U32 u )  = u
+    show (Str s )  = "\"" ++ s ++ "\""
+    show (Ref r )  = r
+    show (Def d )  = d
+    show (List l)  = intercalate ", " $ fmap show l
+    show (Array l) = "<" ++ unwords (fmap show l) ++ ">"
+
+instance Show Property where
+    show (Property s Empty) = s ++ ";"
+    show (Property s v) = s ++ " = " ++ show v ++ ";"
+
+instance Show Node where
+    show (Node (Just l) n ss) = l ++ ": " ++ n ++ " {\n" ++ (f ss) ++ "\n};\n"
+        where f ss  = intercalate "\n" $ fmap show ss
+
+    show (Node Nothing n ss) = n ++ " {\n" ++ (f ss) ++ "\n};\n"
+        where f ss  = intercalate "\n" $ fmap show ss
+
+instance Show Stmt where
+    show (N n) = show n
+    show (P p) = show p
 
 {- Grammar utility functions -}
 

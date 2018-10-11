@@ -39,11 +39,26 @@ lexeme = L.lexeme sc
 symbol :: String -> Parser String
 symbol = L.symbol sc
 
-integer :: Parser Integer
-integer = lexeme (L.decimal <|> L.hexadecimal)
+number :: Parser Integer
+number = lexeme (L.decimal <|> L.hexadecimal)
 
 comma :: Parser String
 comma = symbol ","
+
+semi :: Parser String
+semi = symbol ";"
+
+equal :: Parser String
+equal = symbol "="
+
+delim :: Char -> Parser a -> Parser a
+delim s = between (symbol [s]) (symbol [s])
+
+stringlit :: Parser String
+stringlit = delim '"' (many $ satisfy (`notElem` "\""))
+
+braces :: Parser a -> Parser a
+braces = between (symbol "{") (symbol "}")
 
 {- Grammar parsing functions -}
 
@@ -56,50 +71,41 @@ validPropChar = alphaNumChar <|> validNodeChar <|> oneOf "?#"
 validLabelChar :: Parser Char
 validLabelChar = alphaNumChar <|> char '_'
 
-{- Node name and unit address -}
+{- Identifier parsing -}
 
 nodeident :: Parser String
-nodeident = (lexeme . try) (root <|> internal)
-  where
-    root     = string "/"
-    internal = (:) <$> letterChar <*> MP.many validNodeChar
+nodeident = string "/" <|> internal
+    where internal = (:) <$> letterChar <*> many validNodeChar
+
+refident :: Parser String
+refident = (:) <$> char '&' <*> many validLabelChar
 
 unitaddr :: Parser String
-unitaddr = lexeme $ MP.many hexDigitChar
+unitaddr = lexeme (many hexDigitChar)
 
 nodename :: Parser String
-nodename = (lexeme . try) (refval <|> name)
+nodename = (lexeme . try) (refident <|> name)
   where
     name    = (++) <$> nodeident <*> optaddr
     optaddr = option "" $ (:) <$> char '@' <*> unitaddr
 
-{- Properties -}
+{- Property parsing -}
 
 propname :: Parser String
-propname = (lexeme . try) ((:) <$> letterChar <*> MP.many validPropChar)
+propname = (lexeme . try) ((:) <$> letterChar <*> many validPropChar)
 
 u32 :: Parser Value
-u32 = U32 <$> integer
+u32 = U32 <$> number
 
 str :: Parser Value
-str = do
-    symbol "\""
-    s <- MP.many $ satisfy (`notElem` "\"")
-    symbol "\""
-    return $ Str s
-
-refval :: Parser String
-refval = (:) <$> char '&' <*> MP.many validLabelChar
+str = Str <$> stringlit
 
 ref :: Parser Value
-ref = Ref <$> refval
+ref = Ref <$> refident
 
 array :: Parser Value
-array = do
-    symbol "<"
-    p <- MP.many $ u32 <|> str <|> ref
-    symbol ">"
-    return $ Array p
+array = Array <$> between (symbol "<") (symbol ">") content
+    where content = many (u32 <|> str <|> ref)
 
 list :: Parser Value
 list = f <$> sepBy1 allowed comma
@@ -107,25 +113,33 @@ list = f <$> sepBy1 allowed comma
     f l = if length l == 1 then head l else List l
     allowed = u32 <|> str <|> ref <|> array
 
-value :: Parser Value
-value = u32 <|> str <|> array <|> list
+propval :: Parser Value
+propval = u32 <|> str <|> array <|> list
+
+boolprop :: Parser Property
+boolprop = do
+    n <- propname <* semi
+    return $ Property n Empty
+
+binprop :: Parser Property
+binprop = do
+    n <- propname <* equal
+    v <- propval <* semi
+    return $ Property n v
 
 prop :: Parser Stmt
-prop = do
-    n <- propname
-    symbol "="
-    v <- value
-    symbol ";"
-    return . P $ Property n v
+prop = P <$> (try boolprop <|> try binprop)
 
-{- Node -}
+{- Node parsing -}
 
-node :: Parser Stmt
-node = do
+node' :: Parser Stmt
+node' = do
     n <- nodename
-    symbol "{"
-    s <- MP.many $ (try node) <|> (try prop)
-    symbol "}"
-    symbol ";"
-    return . N $ Node n s
+    c <- braces . many $ (prop <|> node')
+    semi
+    return . N $ Node n c
 
+node :: Parser Node
+node = do
+    N n <- node'
+    return n

@@ -23,15 +23,12 @@ fmtLabel (Just l) = l ++ ": "
 fmtLabel Nothing  = ""
 
 fmtNode :: Node -> Int -> [String]
-fmtNode (Node label name ss) ind = "" : open : content ss ++ close
+fmtNode (Node label name ps ns) ind =
+  "" : open : f fmtProp ps ++ f fmtNode ns ++ close
  where
-  open    = (fmtLabel label ++ name ++ " {") ==> ind
-  content = concatMap (\s -> fmtStmt s (ind + 1))
-  close   = ["};" ==> ind]
-
-fmtStmt :: Stmt -> Int -> [String]
-fmtStmt (N node) ind = fmtNode node ind
-fmtStmt (P prop) ind = fmtProp prop ind
+  open = (fmtLabel label ++ name ++ " {") ==> ind
+  f fn = concatMap (\s -> fn s (ind + 1))
+  close = ["};" ==> ind]
 
 fmtProp :: Property -> Int -> [String]
 fmtProp (Property s Empty) ind = [(s ++ ";") ==> ind]
@@ -43,5 +40,5 @@ fmtValue (U32   u) = u
 fmtValue (Str   s) = "\"" ++ s ++ "\""
 fmtValue (Ref   r) = r
 fmtValue (Def   d) = d
-fmtValue (List  l) = intercalate ", " $ fmap show l
-fmtValue (Array l) = "<" ++ unwords (fmap show l) ++ ">"
+fmtValue (List  l) = intercalate ", " $ fmap fmtValue l
+fmtValue (Array l) = "<" ++ unwords (fmap fmtValue l) ++ ">"

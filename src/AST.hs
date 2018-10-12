@@ -19,7 +19,7 @@ import qualified Text.Megaparsec.Char.Lexer    as L
 
 type Parser = Parsec Void String
 
-data Property = Property String Value deriving (Eq)
+data Property = Property String Value deriving (Show, Eq)
 
 data Value
     = Empty
@@ -29,57 +29,18 @@ data Value
     | Def String
     | List [Value]
     | Array [Value]
-    deriving (Eq)
+    deriving (Show, Eq)
 
 type Label = String
 
 data Include
     = Local String
     | Global String
-    deriving (Eq)
+    deriving (Show, Eq)
 
-data Stmt
-    = N Node
-    | P Property
-    deriving (Eq)
+data Node = Node (Maybe Label) String [Property] [Node] deriving (Show, Eq)
 
-data Node = Node (Maybe Label) String [Stmt] deriving (Eq)
-
-data Source = Source [Include] [Node] deriving (Eq)
-
-{- Show implementations -}
-
-instance Show Value where
-    show Empty     = ""
-    show (U32 u )  = u
-    show (Str s )  = "\"" ++ s ++ "\""
-    show (Ref r )  = r
-    show (Def d )  = d
-    show (List l)  = intercalate ", " $ fmap show l
-    show (Array l) = "<" ++ unwords (fmap show l) ++ ">"
-
-instance Show Property where
-    show (Property s Empty) = s ++ ";"
-    show (Property s v) = s ++ " = " ++ show v ++ ";"
-
-instance Show Node where
-    show (Node (Just l) n ss) = l ++ ": " ++ n ++ " {\n" ++ f ss ++ "};"
-        where f = concatMap ((++ "\n") . show)
-
-    show (Node Nothing n ss) = n ++ " {\n" ++ f ss ++ "};"
-        where f = concatMap ((++ "\n") . show)
-
-instance Show Stmt where
-    show (N n) = show n
-    show (P p) = show p
-
-instance Show Include where
-    show (Local s) = "#include \"" ++ s ++ "\""
-    show (Global s) = "#include <" ++ s ++ ">"
-
-instance Show Source where
-    show (Source incs ns) = f incs ++ "\n\n" ++ f ns
-        where f xs = intercalate "\n" $ fmap show xs
+data Source = Source [Include] [Node] deriving (Show, Eq)
 
 {- Grammar utility functions -}
 
@@ -198,23 +159,22 @@ binprop = do
     v <- propval <* semi
     return $ Property n v
 
-prop :: Parser Stmt
-prop = P <$> (try boolprop <|> try binprop)
+prop :: Parser Property
+prop = try boolprop <|> try binprop
 
 {- Node parsing -}
 
-node' :: Parser Stmt
-node' = do
-    l <- optional nodelabel
-    n <- nodename
-    c <- braces . many $ (prop <|> node')
-    semi
-    return . N $ Node l n c
+data Stmt
+    = N Node
+    | P Property
 
 node :: Parser Node
 node = do
-    N n <- node'
-    return n
+    label   <- optional nodelabel
+    name    <- nodename
+    content <- braces . many $ fmap P prop <|> fmap N node
+    semi
+    return $ Node label name [ p | P p <- content ] [ n | N n <- content ]
 
 {- Directives parsing -}
 

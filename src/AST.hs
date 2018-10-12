@@ -4,6 +4,8 @@ module AST
     , Label(..)
     , Stmt(..)
     , Node(..)
+    , Include(..)
+    , Source(..)
     , parseSource
     )
 where
